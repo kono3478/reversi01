@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オセロゲーム (CPU対戦)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --board-bg: #065f46; /* emerald-800 */
+            --cell-bg: #059669; /* emerald-600 */
+            --black-piece: #1f2937; /* gray-800 */
+            --white-piece: #f9fafb; /* gray-50 */
+        }
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            touch-action: manipulation;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 90vw;
+            height: 90vw;
+            max-width: 500px;
+            max-height: 500px;
+            background-color: var(--board-bg);
+            border: 4px solid var(--board-bg);
+            border-radius: 8px;
+            gap: 2px;
+            padding: 4px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .cell {
+            background-color: var(--cell-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+            position: relative;
+        }
+        .piece {
+            width: 85%;
+            height: 85%;
+            border-radius: 50%;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.455, 0.03, 0.515, 0.955);
+        }
+        .piece.new {
+            transform: scale(0);
+            animation: place-piece 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes place-piece { from { transform: scale(0); } to { transform: scale(1); } }
+        
+        .piece.flipping {
+            transform: rotateY(180deg);
+        }
+        .black { background-color: var(--black-piece); }
+        .white { background-color: var(--white-piece); }
+        
+        .valid-move-highlight::after {
+            content: '';
+            position: absolute;
+            width: 40%;
+            height: 40%;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: pulse-highlight 1.5s infinite;
+        }
+        .item-target-highlight {
+            cursor: crosshair;
+            background-color: #f87171 !important; /* red-400 */
+        }
+        @keyframes pulse-highlight { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .item-sparkle-effect {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            animation: sparkle 0.7s ease-out forwards;
+            z-index: 10;
+        }
+        @keyframes sparkle {
+          0% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.7); transform: scale(0.5); opacity: 1;}
+          80% { opacity: 1; }
+          100% { box-shadow: 0 0 0 30px rgba(250, 204, 21, 0); transform: scale(1); opacity: 0;}
+        }
+
+        .turn-indicator {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .message-box { transition: opacity 0.5s, transform 0.5s; }
+        .thinking { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 text-center mb-4">オセロゲーム (CPU対戦)</h1>
+
+        <!-- Game Info Panel -->
+        <div class="flex justify-between items-start bg-white p-4 rounded-lg shadow-md mb-4">
+            <div>
+                <div id="turn-info" class="text-lg font-semibold text-gray-700 flex items-center mb-2">
+                    <span id="turn-indicator-piece" class="turn-indicator black"></span>
+                    <span id="turn-text">あなたの番</span>
+                </div>
+                <div class="flex space-x-4 text-lg">
+                    <div class="font-bold text-gray-800">あなた (黒): <span id="black-score">2</span></div>
+                    <div class="font-bold text-gray-800">CPU (白): <span id="white-score">2</span></div>
+                </div>
+            </div>
+            <div class="text-right">
+                 <h3 class="text-md font-bold text-gray-600 mb-1">アイテム</h3>
+                 <div class="text-lg space-y-1">
+                    <div class="font-semibold text-gray-800">あなた: <span id="player-items">0</span></div>
+                    <div class="font-semibold text-gray-800">CPU: <span id="computer-items">0</span></div>
+                 </div>
+                 <div class="mt-2">
+                    <h3 class="text-sm font-bold text-gray-600">アイテム増加条件</h3>
+                    <div class="text-lg font-semibold text-indigo-600">コマ差 > <span id="item-condition">10</span></div>
+                 </div>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="flex justify-center items-center mb-4 space-x-4">
+            <button id="use-item-button" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                アイテム使用 (<span id="player-items-btn">0</span>)
+            </button>
+        </div>
+
+        <!-- Game Board -->
+        <div id="board" class="board mx-auto"></div>
+
+        <!-- Message Box -->
+        <div id="message-box" class="message-box text-center text-xl font-bold text-emerald-600 h-10 my-4 opacity-0 transform -translate-y-2"></div>
+
+        <!-- Reset Button -->
+        <div class="text-center mt-4">
+            <button id="reset-button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                リセット
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const boardElement = document.getElementById('board');
+        const blackScoreElement = document.getElementById('black-score');
+        const whiteScoreElement = document.getElementById('white-score');
+        const turnInfoElement = document.getElementById('turn-info');
+        const turnTextElement = document.getElementById('turn-text');
+        const turnIndicatorPiece = document.getElementById('turn-indicator-piece');
+        const playerItemsElement = document.getElementById('player-items');
+        const computerItemsElement = document.getElementById('computer-items');
+        const itemConditionElement = document.getElementById('item-condition');
+        const useItemButton = document.getElementById('use-item-button');
+        const playerItemsBtnElement = document.getElementById('player-items-btn');
+        const messageBox = document.getElementById('message-box');
+        const resetButton = document.getElementById('reset-button');
+
+        // Game constants
+        const EMPTY = 0, BLACK = 1, WHITE = 2;
+        const BOARD_SIZE = 8;
+        const COMPUTER_PLAYER = WHITE;
+        const HUMAN_PLAYER = BLACK;
+
+        // Game state variables
+        let board, currentPlayer, gameOver, isAnimating, playerItems, computerItems, itemCoefficient, pieceDifference, isUsingItem;
+
+        const directions = [
+            { r: -1, c: -1 }, { r: -1, c: 0 }, { r: -1, c: 1 },
+            { r:  0, c: -1 },                 { r:  0, c: 1 },
+            { r:  1, c: -1 }, { r:  1, c: 0 }, { r:  1, c: 1 }
+        ];
+        
+        const positionWeights = [
+            [120, -20, 20,  5,  5, 20, -20, 120],
+            [-20, -40, -5, -5, -5, -5, -40, -20],
+            [ 20,  -5, 15,  3,  3, 15,  -5,  20],
+            [  5,  -5,  3,  3,  3,  3,  -5,   5],
+            [  5,  -5,  3,  3,  3,  3,  -5,   5],
+            [ 20,  -5, 15,  3,  3, 15,  -5,  20],
+            [-20, -40, -5, -5, -5, -5, -40, -20],
+            [120, -20, 20,  5,  5, 20, -20, 120]
+        ];
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function initGame() {
+            board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
+            board[3][3] = WHITE; board[3][4] = BLACK;
+            board[4][3] = BLACK; board[4][4] = WHITE;
+            currentPlayer = HUMAN_PLAYER;
+            gameOver = false;
+            isAnimating = false;
+            isUsingItem = false;
+            playerItems = 0; computerItems = 0;
+            itemCoefficient = 0; pieceDifference = 0;
+            renderBoard();
+            updateInfo();
+            hideMessage();
+            if (currentPlayer === HUMAN_PLAYER) highlightValidMoves();
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.r = r; cell.dataset.c = c;
+                    const pieceValue = board[r][c];
+                    if (pieceValue !== EMPTY) {
+                        const piece = document.createElement('div');
+                        piece.className = `piece ${pieceValue === BLACK ? 'black' : 'white'}`;
+                        cell.appendChild(piece);
+                    }
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        async function handleCellClick(e) {
+            if (gameOver || isAnimating) return;
+            const cell = e.target.closest('.cell');
+            if (!cell) return;
+            const r = parseInt(cell.dataset.r, 10);
+            const c = parseInt(cell.dataset.c, 10);
+
+            if (isUsingItem) {
+                await handleItemTargetClick(r, c);
+                return;
+            }
+            
+            if (currentPlayer !== HUMAN_PLAYER) return;
+
+            const piecesToFlip = getFlippablePieces(r, c, currentPlayer);
+            if (piecesToFlip.length === 0) {
+                showMessage("そこには置けません。");
+                return;
+            }
+            
+            isAnimating = true;
+            updateInfo();
+            hideMessage();
+            clearHighlights();
+            
+            await placePieceAndAnimateFlip(r, c, currentPlayer, piecesToFlip);
+            
+            updateItemsAndCoefficients();
+            updateInfo();
+            isAnimating = false;
+            switchPlayer();
+        }
+
+        async function handleItemTargetClick(r, c) {
+            if (board[r][c] !== COMPUTER_PLAYER) {
+                showMessage("相手のコマを選択してください。");
+                return;
+            }
+            
+            isAnimating = true;
+            isUsingItem = false;
+            updateInfo();
+            clearHighlights();
+
+            const cell = boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`);
+            const sparkle = document.createElement('div');
+            sparkle.className = 'item-sparkle-effect';
+            cell.appendChild(sparkle);
+            await sleep(700);
+            cell.removeChild(sparkle);
+            
+            playerItems--;
+            
+            const piecesToFlip = getFlippablePieces(r, c, HUMAN_PLAYER, true);
+            await animateFlipping([{r,c}, ...piecesToFlip], HUMAN_PLAYER);
+            
+            updateItemsAndCoefficients();
+            updateInfo();
+            highlightValidMoves();
+            showMessage("アイテムを使用しました！", true);
+            isAnimating = false;
+        }
+
+        function handleUseItemClick() {
+            if (gameOver || isAnimating || playerItems <= 0) return;
+            isUsingItem = !isUsingItem;
+            clearHighlights();
+            if (isUsingItem) {
+                showMessage("アイテムを使用する相手のコマを選んでください", false);
+                highlightItemTargets();
+            } else {
+                hideMessage();
+                highlightValidMoves();
+            }
+        }
+
+        async function placePieceAndAnimateFlip(r, c, player, piecesToFlip) {
+            board[r][c] = player;
+            const cell = boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`);
+            const piece = document.createElement('div');
+            piece.className = `piece new ${player === BLACK ? 'black' : 'white'}`;
+            cell.appendChild(piece);
+            await sleep(300);
+            
+            await animateFlipping(piecesToFlip, player);
+        }
+        
+        async function animateFlipping(piecesToFlip, player) {
+            for(const pieceCoord of piecesToFlip) {
+                const {r, c} = pieceCoord;
+                board[r][c] = player;
+                const pieceEl = boardElement.querySelector(`[data-r='${r}'][data-c='${c}'] .piece`);
+                if (pieceEl) {
+                    pieceEl.classList.add('flipping');
+                    await sleep(150);
+                    pieceEl.classList.toggle('black');
+                    pieceEl.classList.toggle('white');
+                    await sleep(150);
+                    pieceEl.classList.remove('flipping');
+                }
+                updateInfo();
+            }
+        }
+
+        function switchPlayer() {
+            clearHighlights();
+            currentPlayer = (currentPlayer === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+            
+            if (checkGameEndCondition()) return;
+
+            if (!hasValidMoves(currentPlayer)) {
+                const opponent = (currentPlayer === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+                if (!hasValidMoves(opponent)) {
+                    checkGameEndCondition();
+                    return;
+                }
+                const playerName = currentPlayer === HUMAN_PLAYER ? "あなた" : "CPU";
+                showMessage(`${playerName}はパスします。`);
+                currentPlayer = opponent;
+            }
+            
+            updateInfo();
+
+            if (currentPlayer === COMPUTER_PLAYER) {
+                isAnimating = true;
+                turnInfoElement.classList.add('thinking');
+                setTimeout(computerMove, 1200);
+            } else {
+                highlightValidMoves();
+            }
+        }
+
+        async function computerMove() {
+            const totalPieces = board.flat().filter(p => p !== EMPTY).length;
+            const gamePhase = getGamePhase(totalPieces);
+
+            let bestMove = null;
+            let bestScore = -Infinity;
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] === EMPTY) {
+                        const piecesToFlip = getFlippablePieces(r, c, COMPUTER_PLAYER);
+                        if (piecesToFlip.length > 0) {
+                            const move = { r, c, piecesToFlip };
+                            const score = evaluateMove(move, gamePhase);
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMove = move;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bestMove) {
+                await placePieceAndAnimateFlip(bestMove.r, bestMove.c, COMPUTER_PLAYER, bestMove.piecesToFlip);
+                updateItemsAndCoefficients();
+            }
+            
+            isAnimating = false;
+            turnInfoElement.classList.remove('thinking');
+            switchPlayer();
+        }
+
+        function getGamePhase(totalPieces) {
+            if (totalPieces < 24) return 'early';
+            if (totalPieces < 48) return 'mid';
+            return 'late';
+        }
+
+        function evaluateMove(move, gamePhase) {
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[move.r][move.c] = COMPUTER_PLAYER;
+            move.piecesToFlip.forEach(p => { tempBoard[p.r][p.c] = COMPUTER_PLAYER; });
+
+            let positionalScore = positionWeights[move.r][move.c];
+            
+            const scores = calculateScores(tempBoard);
+            const pieceDifference = scores.white - scores.black;
+            let pieceScore = 0;
+
+            const newPieceDifferenceAbs = Math.abs(scores.black - scores.white);
+            const currentItemThreshold = (itemCoefficient + 1) * 10;
+            let itemGainScore = 0;
+            if (newPieceDifferenceAbs >= currentItemThreshold) {
+                if (scores.white < scores.black) {
+                     itemGainScore = 250; // Big bonus for gaining an item
+                } else {
+                     itemGainScore = -250; // Big penalty for giving an item
+                }
+            }
+
+            let finalScore = 0;
+            switch(gamePhase) {
+                case 'early':
+                    pieceScore = -pieceDifference * 10;
+                    finalScore = positionalScore * 1.5 + pieceScore + itemGainScore;
+                    break;
+                case 'mid':
+                    pieceScore = pieceDifference * 5;
+                    finalScore = positionalScore * 1.2 + pieceScore + itemGainScore;
+                    break;
+                case 'late':
+                    pieceScore = pieceDifference * 10;
+                    finalScore = positionalScore + pieceScore;
+                    break;
+            }
+
+            finalScore += Math.random();
+            return finalScore;
+        }
+
+        function hasValidMoves(player) {
+            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === EMPTY && getFlippablePieces(r, c, player).length > 0) return true;
+            return false;
+        }
+
+        function getFlippablePieces(r, c, player, fromOccupied = false) {
+            if (board[r][c] !== EMPTY && !fromOccupied) return [];
+            const opponent = (player === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+            let allFlippablePieces = [];
+
+            for (const dir of directions) {
+                let piecesInDirection = [];
+                let currR = r + dir.r, currC = c + dir.c;
+                while (currR >= 0 && currR < BOARD_SIZE && currC >= 0 && currC < BOARD_SIZE) {
+                    if (board[currR][currC] === opponent) {
+                        piecesInDirection.push({ r: currR, c: currC });
+                    } else if (board[currR][currC] === player) {
+                        allFlippablePieces.push(...piecesInDirection);
+                        break;
+                    } else {
+                        break;
+                    }
+                    currR += dir.r; currC += dir.c;
+                }
+            }
+            return allFlippablePieces;
+        }
+        
+        function updateItemsAndCoefficients() {
+            const scores = calculateScores();
+            pieceDifference = Math.abs(scores.black - scores.white);
+            while (pieceDifference >= (itemCoefficient + 1) * 10) {
+                itemCoefficient++;
+                let message = "";
+                if (scores.black < scores.white) {
+                    playerItems++;
+                    message = `劣勢のため、あなたのアイテムが1個増えました！`;
+                } else if (scores.white < scores.black) {
+                    computerItems++;
+                    message = `劣勢のため、CPUのアイテムが1個増えました！`;
+                }
+                if (message) showMessage(message, true);
+            }
+        }
+
+        function checkGameEndCondition() {
+            const isBoardFull = !board.flat().includes(EMPTY);
+            const noMovesLeft = !hasValidMoves(HUMAN_PLAYER) && !hasValidMoves(COMPUTER_PLAYER);
+
+            if (isBoardFull || noMovesLeft) {
+                gameOver = true;
+                if (playerItems > 0 || computerItems > 0) {
+                    startItemPhase();
+                } else {
+                    finalTally();
+                }
+                return true;
+            }
+            return false;
+        }
+        
+        async function startItemPhase() {
+            isAnimating = true;
+            showMessage("最終決戦フェーズ！", false);
+            useItemButton.disabled = true;
+            let itemTurnPlayer = currentPlayer;
+
+            while (playerItems > 0 || computerItems > 0) {
+                if (itemTurnPlayer === HUMAN_PLAYER && playerItems > 0) {
+                    await playerUseItemEndGame();
+                } else if (itemTurnPlayer === COMPUTER_PLAYER && computerItems > 0) {
+                    await computerUseItemEndGame();
+                }
+                const nextPlayer = (itemTurnPlayer === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+                if ((nextPlayer === HUMAN_PLAYER && playerItems > 0) || (nextPlayer === COMPUTER_PLAYER && computerItems > 0)) {
+                    itemTurnPlayer = nextPlayer;
+                }
+            }
+            finalTally();
+        }
+
+        function playerUseItemEndGame() {
+            return new Promise(resolve => {
+                showMessage("アイテムを使用する相手のコマを選んでください", false);
+                highlightItemTargets(true);
+                const listener = async (e) => {
+                    const cell = e.target.closest('.cell');
+                    if(cell) {
+                        const r = parseInt(cell.dataset.r, 10);
+                        const c = parseInt(cell.dataset.c, 10);
+                        if(board[r][c] === COMPUTER_PLAYER) {
+                            boardElement.removeEventListener('click', listener);
+                            clearHighlights();
+                            const sparkle = document.createElement('div');
+                            sparkle.className = 'item-sparkle-effect';
+                            cell.appendChild(sparkle);
+                            await sleep(700);
+                            cell.removeChild(sparkle);
+                            playerItems--;
+                            const flips = getFlippablePieces(r, c, HUMAN_PLAYER, true);
+                            await animateFlipping([{r,c}, ...flips], HUMAN_PLAYER);
+                            resolve();
+                        }
+                    }
+                };
+                boardElement.addEventListener('click', listener);
+            });
+        }
+
+        async function computerUseItemEndGame() {
+            showMessage("CPUがアイテムを使用中...", false);
+            await sleep(1000);
+            const targets = [];
+            for(let r=0; r<BOARD_SIZE; r++) for(let c=0; c<BOARD_SIZE; c++) if(board[r][c] === HUMAN_PLAYER) targets.push({r,c});
+            
+            if(targets.length > 0) {
+                let bestItemTarget = null;
+                let maxFlips = -1;
+                for (const target of targets) {
+                    const tempBoard = board.map(row => [...row]);
+                    tempBoard[target.r][target.c] = COMPUTER_PLAYER;
+                    const flips = getFlippablePieces(target.r, target.c, COMPUTER_PLAYER, true);
+                    if (flips.length > maxFlips) {
+                        maxFlips = flips.length;
+                        bestItemTarget = target;
+                    }
+                }
+                
+                const cell = boardElement.querySelector(`[data-r='${bestItemTarget.r}'][data-c='${bestItemTarget.c}']`);
+                const sparkle = document.createElement('div');
+                sparkle.className = 'item-sparkle-effect';
+                cell.appendChild(sparkle);
+                await sleep(700);
+                cell.removeChild(sparkle);
+                computerItems--;
+                const flips = getFlippablePieces(bestItemTarget.r, bestItemTarget.c, COMPUTER_PLAYER, true);
+                await animateFlipping([bestItemTarget, ...flips], COMPUTER_PLAYER);
+            }
+        }
+
+        function finalTally() {
+            gameOver = true;
+            isAnimating = false;
+            const { black, white } = calculateScores();
+            let winnerMessage = black > white ? "あなたの勝ちです！" : white > black ? "CPUの勝ちです！" : "引き分けです！";
+            updateInfo();
+            showMessage(`ゲーム終了！ ${winnerMessage}`, false);
+        }
+
+        function updateInfo() {
+            const scores = calculateScores();
+            blackScoreElement.textContent = scores.black;
+            whiteScoreElement.textContent = scores.white;
+            playerItemsElement.textContent = playerItems;
+            computerItemsElement.textContent = computerItems;
+            playerItemsBtnElement.textContent = playerItems;
+            itemConditionElement.textContent = (itemCoefficient + 1) * 10;
+            
+            useItemButton.disabled = (playerItems <= 0 || isUsingItem || currentPlayer !== HUMAN_PLAYER || gameOver || isAnimating);
+
+            if (gameOver) {
+                turnTextElement.textContent = "ゲーム終了";
+                turnIndicatorPiece.style.display = 'none';
+                turnInfoElement.classList.remove('thinking');
+            } else {
+                turnTextElement.textContent = currentPlayer === HUMAN_PLAYER ? 'あなたの番' : 'CPUの番';
+                turnIndicatorPiece.style.display = 'inline-block';
+                turnIndicatorPiece.className = `turn-indicator ${currentPlayer === HUMAN_PLAYER ? 'black' : 'white'}`;
+            }
+        }
+
+        function calculateScores(boardState = board) {
+            let black = 0, white = 0;
+            (boardState || board).flat().forEach(p => { if (p === BLACK) black++; if (p === WHITE) white++; });
+            return { black, white };
+        }
+
+        function showMessage(text, autoHide = true) {
+            messageBox.textContent = text;
+            messageBox.classList.remove('opacity-0', '-translate-y-2');
+            if (autoHide) setTimeout(hideMessage, 3000);
+        }
+
+        function hideMessage() { messageBox.classList.add('opacity-0', '-translate-y-2'); }
+
+        function highlightValidMoves() {
+            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === EMPTY && getFlippablePieces(r, c, HUMAN_PLAYER).length > 0) boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`).classList.add('valid-move-highlight');
+        }
+        
+        function highlightItemTargets(isEndGame = false) {
+            const targetPlayer = COMPUTER_PLAYER;
+            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === targetPlayer) boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`).classList.add('item-target-highlight');
+        }
+
+        function clearHighlights() {
+            boardElement.querySelectorAll('.valid-move-highlight, .item-target-highlight').forEach(el => el.classList.remove('valid-move-highlight', 'item-target-highlight'));
+        }
+
+        // Event Listeners
+        boardElement.addEventListener('click', handleCellClick);
+        resetButton.addEventListener('click', initGame);
+        useItemButton.addEventListener('click', handleUseItemClick);
+
+        // Start the game
+        window.onload = initGame;
+    </script>
+</body>
+</html>
