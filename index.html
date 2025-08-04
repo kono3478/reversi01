@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>オセロゲーム (CPU対戦)</title>
+    <title>オセロゲーム</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -16,6 +16,28 @@
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
             touch-action: manipulation;
         }
+        .hidden { display: none; }
+
+        /* Title Screen */
+        #title-screen {
+            animation: fadeIn 1s ease-in-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .mode-button, .rule-button {
+            transition: all 0.2s ease-in-out;
+        }
+        .mode-button.selected {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 3px #3b82f6; /* ring-blue-500 */
+        }
+        .rule-button.selected {
+            background-color: #dbeafe; /* blue-100 */
+            color: #1e40af; /* blue-800 */
+            border: 2px solid #3b82f6;
+        }
+
+
+        /* Game Screen */
         .board {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
@@ -55,9 +77,7 @@
         }
         @keyframes place-piece { from { transform: scale(0); } to { transform: scale(1); } }
         
-        .piece.flipping {
-            transform: rotateY(180deg);
-        }
+        .piece.flipping { transform: rotateY(180deg); }
         .black { background-color: var(--black-piece); }
         .white { background-color: var(--white-piece); }
         
@@ -72,7 +92,7 @@
         }
         .item-target-highlight {
             cursor: crosshair;
-            background-color: #f87171 !important; /* red-400 */
+            background-color: #f87171 !important;
         }
         @keyframes pulse-highlight { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         
@@ -106,9 +126,45 @@
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-xl mx-auto">
-        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 text-center mb-4">オセロゲーム (CPU対戦)</h1>
+    <!-- Title Screen -->
+    <div id="title-screen" class="w-full max-w-2xl mx-auto text-center">
+        <h1 class="text-5xl md:text-6xl font-bold text-gray-800 mb-6">オセロゲーム</h1>
+        <p class="text-lg text-gray-600 mb-8">モードとルールを選択して、スペースキーでゲームを開始してください。</p>
 
+        <div class="flex justify-center gap-4 mb-6">
+            <button id="solo-mode-button" class="mode-button bg-white p-6 rounded-lg shadow-md w-48 selected">
+                <h2 class="text-2xl font-bold text-emerald-600">ソロプレイ</h2>
+                <p class="text-gray-500 mt-1">CPUと対戦します</p>
+            </button>
+            <button id="versus-mode-button" class="mode-button bg-white p-6 rounded-lg shadow-md w-48">
+                <h2 class="text-2xl font-bold text-sky-600">対戦モード</h2>
+                <p class="text-gray-500 mt-1">2人で対戦します</p>
+            </button>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow-md text-center max-w-lg mx-auto mb-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-3">アイテム増加ルール</h3>
+            <div class="flex justify-center gap-4">
+                <button id="rule-5-button" data-value="5" class="rule-button bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded border-2 border-transparent">5枚ごと</button>
+                <button id="rule-10-button" data-value="10" class="rule-button bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded border-2 border-transparent selected">10枚ごと</button>
+                <button id="rule-15-button" data-value="15" class="rule-button bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded border-2 border-transparent">15枚ごと</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md text-left max-w-lg mx-auto">
+            <h3 class="text-xl font-bold text-gray-800 mb-3 text-center">ゲームルール</h3>
+            <ul class="space-y-2 text-gray-700">
+                <li><strong>基本:</strong> 相手のコマを自分のコマで挟むとひっくり返せます。</li>
+                <li><strong>アイテム獲得:</strong> コマの枚数差が選択した枚数に達するたび、負けている側にアイテムが1つ与えられます。</li>
+                <li><strong>アイテム効果:</strong> アイテムを1つ使い、相手のコマを1つ指定して自分のコマにできます。</li>
+                <li><strong>最終決戦:</strong> 全マスが埋まった時、アイテムが残っていると最終決戦が始まります。</li>
+                <li><strong>操作:</strong> ゲーム中に <kbd class="px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Backspace</kbd> キーでタイトルに戻ります。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="hidden w-full max-w-xl mx-auto">
         <!-- Game Info Panel -->
         <div class="flex justify-between items-start bg-white p-4 rounded-lg shadow-md mb-4">
             <div>
@@ -117,15 +173,15 @@
                     <span id="turn-text">あなたの番</span>
                 </div>
                 <div class="flex space-x-4 text-lg">
-                    <div class="font-bold text-gray-800">あなた (黒): <span id="black-score">2</span></div>
-                    <div class="font-bold text-gray-800">CPU (白): <span id="white-score">2</span></div>
+                    <div class="font-bold text-gray-800"><span id="black-player-label">あなた (黒)</span>: <span id="black-score">2</span></div>
+                    <div class="font-bold text-gray-800"><span id="white-player-label">CPU (白)</span>: <span id="white-score">2</span></div>
                 </div>
             </div>
             <div class="text-right">
                  <h3 class="text-md font-bold text-gray-600 mb-1">アイテム</h3>
                  <div class="text-lg space-y-1">
-                    <div class="font-semibold text-gray-800">あなた: <span id="player-items">0</span></div>
-                    <div class="font-semibold text-gray-800">CPU: <span id="computer-items">0</span></div>
+                    <div class="font-semibold text-gray-800"><span id="player-item-label">あなた</span>: <span id="player-items">0</span></div>
+                    <div class="font-semibold text-gray-800"><span id="opponent-item-label">CPU</span>: <span id="computer-items">0</span></div>
                  </div>
                  <div class="mt-2">
                     <h3 class="text-sm font-bold text-gray-600">アイテム増加条件</h3>
@@ -141,13 +197,8 @@
             </button>
         </div>
 
-        <!-- Game Board -->
         <div id="board" class="board mx-auto"></div>
-
-        <!-- Message Box -->
         <div id="message-box" class="message-box text-center text-xl font-bold text-emerald-600 h-10 my-4 opacity-0 transform -translate-y-2"></div>
-
-        <!-- Reset Button -->
         <div class="text-center mt-4">
             <button id="reset-button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
                 リセット
@@ -157,6 +208,11 @@
 
     <script>
         // DOM Elements
+        const titleScreen = document.getElementById('title-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const soloModeButton = document.getElementById('solo-mode-button');
+        const versusModeButton = document.getElementById('versus-mode-button');
+        const ruleButtons = document.querySelectorAll('.rule-button');
         const boardElement = document.getElementById('board');
         const blackScoreElement = document.getElementById('black-score');
         const whiteScoreElement = document.getElementById('white-score');
@@ -170,6 +226,10 @@
         const playerItemsBtnElement = document.getElementById('player-items-btn');
         const messageBox = document.getElementById('message-box');
         const resetButton = document.getElementById('reset-button');
+        const blackPlayerLabel = document.getElementById('black-player-label');
+        const whitePlayerLabel = document.getElementById('white-player-label');
+        const playerItemLabel = document.getElementById('player-item-label');
+        const opponentItemLabel = document.getElementById('opponent-item-label');
 
         // Game constants
         const EMPTY = 0, BLACK = 1, WHITE = 2;
@@ -178,41 +238,44 @@
         const HUMAN_PLAYER = BLACK;
 
         // Game state variables
-        let board, currentPlayer, gameOver, isAnimating, playerItems, computerItems, itemCoefficient, pieceDifference, isUsingItem;
+        let appState, gameMode, itemRuleValue, board, currentPlayer, gameOver, isAnimating, playerItems, computerItems, itemCoefficient, pieceDifference, isUsingItem;
 
-        const directions = [
-            { r: -1, c: -1 }, { r: -1, c: 0 }, { r: -1, c: 1 },
-            { r:  0, c: -1 },                 { r:  0, c: 1 },
-            { r:  1, c: -1 }, { r:  1, c: 0 }, { r:  1, c: 1 }
-        ];
-        
-        const positionWeights = [
-            [120, -20, 20,  5,  5, 20, -20, 120],
-            [-20, -40, -5, -5, -5, -5, -40, -20],
-            [ 20,  -5, 15,  3,  3, 15,  -5,  20],
-            [  5,  -5,  3,  3,  3,  3,  -5,   5],
-            [  5,  -5,  3,  3,  3,  3,  -5,   5],
-            [ 20,  -5, 15,  3,  3, 15,  -5,  20],
-            [-20, -40, -5, -5, -5, -5, -40, -20],
-            [120, -20, 20,  5,  5, 20, -20, 120]
-        ];
-
+        const directions = [ { r: -1, c: -1 }, { r: -1, c: 0 }, { r: -1, c: 1 }, { r:  0, c: -1 }, { r:  0, c: 1 }, { r:  1, c: -1 }, { r:  1, c: 0 }, { r:  1, c: 1 } ];
+        const positionWeights = [ [120,-20,20,5,5,20,-20,120],[-20,-40,-5,-5,-5,-5,-40,-20],[20,-5,15,3,3,15,-5,20],[5,-5,3,3,3,3,-5,5],[5,-5,3,3,3,3,-5,5],[20,-5,15,3,3,15,-5,20],[-20,-40,-5,-5,-5,-5,-40,-20],[120,-20,20,5,5,20,-20,120] ];
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function showTitleScreen() {
+            appState = 'title';
+            gameMode = 'solo';
+            itemRuleValue = 10;
+            titleScreen.classList.remove('hidden');
+            gameScreen.classList.add('hidden');
+            soloModeButton.classList.add('selected');
+            versusModeButton.classList.remove('selected');
+            ruleButtons.forEach(btn => {
+                btn.classList.toggle('selected', parseInt(btn.dataset.value) === itemRuleValue);
+            });
+        }
+
+        function startGame() {
+            appState = 'playing';
+            titleScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            initGame();
+        }
 
         function initGame() {
             board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
             board[3][3] = WHITE; board[3][4] = BLACK;
             board[4][3] = BLACK; board[4][4] = WHITE;
             currentPlayer = HUMAN_PLAYER;
-            gameOver = false;
-            isAnimating = false;
-            isUsingItem = false;
+            gameOver = false; isAnimating = false; isUsingItem = false;
             playerItems = 0; computerItems = 0;
             itemCoefficient = 0; pieceDifference = 0;
             renderBoard();
             updateInfo();
             hideMessage();
-            if (currentPlayer === HUMAN_PLAYER) highlightValidMoves();
+            highlightValidMoves();
         }
 
         function renderBoard() {
@@ -245,7 +308,7 @@
                 return;
             }
             
-            if (currentPlayer !== HUMAN_PLAYER) return;
+            if (gameMode === 'solo' && currentPlayer !== HUMAN_PLAYER) return;
 
             const piecesToFlip = getFlippablePieces(r, c, currentPlayer);
             if (piecesToFlip.length === 0) {
@@ -267,7 +330,8 @@
         }
 
         async function handleItemTargetClick(r, c) {
-            if (board[r][c] !== COMPUTER_PLAYER) {
+            const opponent = currentPlayer === BLACK ? WHITE : BLACK;
+            if (board[r][c] !== opponent) {
                 showMessage("相手のコマを選択してください。");
                 return;
             }
@@ -284,10 +348,10 @@
             await sleep(700);
             cell.removeChild(sparkle);
             
-            playerItems--;
+            if (currentPlayer === BLACK) playerItems--; else computerItems--;
             
-            const piecesToFlip = getFlippablePieces(r, c, HUMAN_PLAYER, true);
-            await animateFlipping([{r,c}, ...piecesToFlip], HUMAN_PLAYER);
+            const piecesToFlip = getFlippablePieces(r, c, currentPlayer, true);
+            await animateFlipping([{r,c}, ...piecesToFlip], currentPlayer);
             
             updateItemsAndCoefficients();
             updateInfo();
@@ -297,7 +361,10 @@
         }
 
         function handleUseItemClick() {
-            if (gameOver || isAnimating || playerItems <= 0) return;
+            if (gameOver || isAnimating) return;
+            if (currentPlayer === BLACK && playerItems <= 0) return;
+            if (currentPlayer === WHITE && computerItems <= 0) return;
+
             isUsingItem = !isUsingItem;
             clearHighlights();
             if (isUsingItem) {
@@ -316,7 +383,6 @@
             piece.className = `piece new ${player === BLACK ? 'black' : 'white'}`;
             cell.appendChild(piece);
             await sleep(300);
-            
             await animateFlipping(piecesToFlip, player);
         }
         
@@ -339,24 +405,24 @@
 
         function switchPlayer() {
             clearHighlights();
-            currentPlayer = (currentPlayer === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+            currentPlayer = (currentPlayer === BLACK) ? WHITE : BLACK;
             
             if (checkGameEndCondition()) return;
 
             if (!hasValidMoves(currentPlayer)) {
-                const opponent = (currentPlayer === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+                const opponent = (currentPlayer === BLACK) ? WHITE : BLACK;
                 if (!hasValidMoves(opponent)) {
                     checkGameEndCondition();
                     return;
                 }
-                const playerName = currentPlayer === HUMAN_PLAYER ? "あなた" : "CPU";
+                const playerName = currentPlayer === BLACK ? "黒" : "白";
                 showMessage(`${playerName}はパスします。`);
                 currentPlayer = opponent;
             }
             
             updateInfo();
 
-            if (currentPlayer === COMPUTER_PLAYER) {
+            if (gameMode === 'solo' && currentPlayer === COMPUTER_PLAYER) {
                 isAnimating = true;
                 turnInfoElement.classList.add('thinking');
                 setTimeout(computerMove, 1200);
@@ -368,9 +434,7 @@
         async function computerMove() {
             const totalPieces = board.flat().filter(p => p !== EMPTY).length;
             const gamePhase = getGamePhase(totalPieces);
-
-            let bestMove = null;
-            let bestScore = -Infinity;
+            let bestMove = null, bestScore = -Infinity;
 
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
@@ -408,42 +472,24 @@
             const tempBoard = board.map(row => [...row]);
             tempBoard[move.r][move.c] = COMPUTER_PLAYER;
             move.piecesToFlip.forEach(p => { tempBoard[p.r][p.c] = COMPUTER_PLAYER; });
-
             let positionalScore = positionWeights[move.r][move.c];
-            
             const scores = calculateScores(tempBoard);
             const pieceDifference = scores.white - scores.black;
             let pieceScore = 0;
-
             const newPieceDifferenceAbs = Math.abs(scores.black - scores.white);
-            const currentItemThreshold = (itemCoefficient + 1) * 10;
+            const currentItemThreshold = (itemCoefficient + 1) * itemRuleValue;
             let itemGainScore = 0;
             if (newPieceDifferenceAbs >= currentItemThreshold) {
-                if (scores.white < scores.black) {
-                     itemGainScore = 250; // Big bonus for gaining an item
-                } else {
-                     itemGainScore = -250; // Big penalty for giving an item
-                }
+                if (scores.white < scores.black) itemGainScore = 250;
+                else itemGainScore = -250;
             }
-
             let finalScore = 0;
             switch(gamePhase) {
-                case 'early':
-                    pieceScore = -pieceDifference * 10;
-                    finalScore = positionalScore * 1.5 + pieceScore + itemGainScore;
-                    break;
-                case 'mid':
-                    pieceScore = pieceDifference * 5;
-                    finalScore = positionalScore * 1.2 + pieceScore + itemGainScore;
-                    break;
-                case 'late':
-                    pieceScore = pieceDifference * 10;
-                    finalScore = positionalScore + pieceScore;
-                    break;
+                case 'early': pieceScore = -pieceDifference * 10; finalScore = positionalScore * 1.5 + pieceScore + itemGainScore; break;
+                case 'mid': pieceScore = pieceDifference * 5; finalScore = positionalScore * 1.2 + pieceScore + itemGainScore; break;
+                case 'late': pieceScore = pieceDifference * 10; finalScore = positionalScore + pieceScore; break;
             }
-
-            finalScore += Math.random();
-            return finalScore;
+            return finalScore + Math.random();
         }
 
         function hasValidMoves(player) {
@@ -453,21 +499,15 @@
 
         function getFlippablePieces(r, c, player, fromOccupied = false) {
             if (board[r][c] !== EMPTY && !fromOccupied) return [];
-            const opponent = (player === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
+            const opponent = (player === BLACK) ? WHITE : BLACK;
             let allFlippablePieces = [];
-
             for (const dir of directions) {
                 let piecesInDirection = [];
                 let currR = r + dir.r, currC = c + dir.c;
                 while (currR >= 0 && currR < BOARD_SIZE && currC >= 0 && currC < BOARD_SIZE) {
-                    if (board[currR][currC] === opponent) {
-                        piecesInDirection.push({ r: currR, c: currC });
-                    } else if (board[currR][currC] === player) {
-                        allFlippablePieces.push(...piecesInDirection);
-                        break;
-                    } else {
-                        break;
-                    }
+                    if (board[currR][currC] === opponent) piecesInDirection.push({ r: currR, c: currC });
+                    else if (board[currR][currC] === player) { allFlippablePieces.push(...piecesInDirection); break; }
+                    else break;
                     currR += dir.r; currC += dir.c;
                 }
             }
@@ -477,16 +517,11 @@
         function updateItemsAndCoefficients() {
             const scores = calculateScores();
             pieceDifference = Math.abs(scores.black - scores.white);
-            while (pieceDifference >= (itemCoefficient + 1) * 10) {
+            while (pieceDifference >= (itemCoefficient + 1) * itemRuleValue) {
                 itemCoefficient++;
                 let message = "";
-                if (scores.black < scores.white) {
-                    playerItems++;
-                    message = `劣勢のため、あなたのアイテムが1個増えました！`;
-                } else if (scores.white < scores.black) {
-                    computerItems++;
-                    message = `劣勢のため、CPUのアイテムが1個増えました！`;
-                }
+                if (scores.black < scores.white) { playerItems++; message = `劣勢のため、黒のアイテムが1個増えました！`; }
+                else if (scores.white < scores.black) { computerItems++; message = `劣勢のため、白のアイテムが1個増えました！`; }
                 if (message) showMessage(message, true);
             }
         }
@@ -494,14 +529,10 @@
         function checkGameEndCondition() {
             const isBoardFull = !board.flat().includes(EMPTY);
             const noMovesLeft = !hasValidMoves(HUMAN_PLAYER) && !hasValidMoves(COMPUTER_PLAYER);
-
             if (isBoardFull || noMovesLeft) {
                 gameOver = true;
-                if (playerItems > 0 || computerItems > 0) {
-                    startItemPhase();
-                } else {
-                    finalTally();
-                }
+                if (playerItems > 0 || computerItems > 0) startItemPhase();
+                else finalTally();
                 return true;
             }
             return false;
@@ -512,31 +543,26 @@
             showMessage("最終決戦フェーズ！", false);
             useItemButton.disabled = true;
             let itemTurnPlayer = currentPlayer;
-
             while (playerItems > 0 || computerItems > 0) {
-                if (itemTurnPlayer === HUMAN_PLAYER && playerItems > 0) {
-                    await playerUseItemEndGame();
-                } else if (itemTurnPlayer === COMPUTER_PLAYER && computerItems > 0) {
-                    await computerUseItemEndGame();
-                }
+                if (itemTurnPlayer === HUMAN_PLAYER && playerItems > 0) await playerUseItemEndGame();
+                else if (itemTurnPlayer === COMPUTER_PLAYER && computerItems > 0) await computerUseItemEndGame();
                 const nextPlayer = (itemTurnPlayer === HUMAN_PLAYER) ? COMPUTER_PLAYER : HUMAN_PLAYER;
-                if ((nextPlayer === HUMAN_PLAYER && playerItems > 0) || (nextPlayer === COMPUTER_PLAYER && computerItems > 0)) {
-                    itemTurnPlayer = nextPlayer;
-                }
+                if ((nextPlayer === HUMAN_PLAYER && playerItems > 0) || (nextPlayer === COMPUTER_PLAYER && computerItems > 0)) itemTurnPlayer = nextPlayer;
             }
             finalTally();
         }
 
         function playerUseItemEndGame() {
             return new Promise(resolve => {
-                showMessage("アイテムを使用する相手のコマを選んでください", false);
-                highlightItemTargets(true);
+                const player = (gameMode === 'solo') ? HUMAN_PLAYER : currentPlayer;
+                const opponent = player === BLACK ? WHITE : BLACK;
+                showMessage(`${player === BLACK ? '黒' : '白'}の番: アイテムを使用する相手のコマを選択`, false);
+                highlightItemTargets(true, opponent);
                 const listener = async (e) => {
                     const cell = e.target.closest('.cell');
                     if(cell) {
-                        const r = parseInt(cell.dataset.r, 10);
-                        const c = parseInt(cell.dataset.c, 10);
-                        if(board[r][c] === COMPUTER_PLAYER) {
+                        const r = parseInt(cell.dataset.r, 10), c = parseInt(cell.dataset.c, 10);
+                        if(board[r][c] === opponent) {
                             boardElement.removeEventListener('click', listener);
                             clearHighlights();
                             const sparkle = document.createElement('div');
@@ -544,9 +570,9 @@
                             cell.appendChild(sparkle);
                             await sleep(700);
                             cell.removeChild(sparkle);
-                            playerItems--;
-                            const flips = getFlippablePieces(r, c, HUMAN_PLAYER, true);
-                            await animateFlipping([{r,c}, ...flips], HUMAN_PLAYER);
+                            if(player === BLACK) playerItems--; else computerItems--;
+                            const flips = getFlippablePieces(r, c, player, true);
+                            await animateFlipping([{r,c}, ...flips], player);
                             resolve();
                         }
                     }
@@ -560,20 +586,12 @@
             await sleep(1000);
             const targets = [];
             for(let r=0; r<BOARD_SIZE; r++) for(let c=0; c<BOARD_SIZE; c++) if(board[r][c] === HUMAN_PLAYER) targets.push({r,c});
-            
             if(targets.length > 0) {
-                let bestItemTarget = null;
-                let maxFlips = -1;
+                let bestItemTarget = null, maxFlips = -1;
                 for (const target of targets) {
-                    const tempBoard = board.map(row => [...row]);
-                    tempBoard[target.r][target.c] = COMPUTER_PLAYER;
                     const flips = getFlippablePieces(target.r, target.c, COMPUTER_PLAYER, true);
-                    if (flips.length > maxFlips) {
-                        maxFlips = flips.length;
-                        bestItemTarget = target;
-                    }
+                    if (flips.length > maxFlips) { maxFlips = flips.length; bestItemTarget = target; }
                 }
-                
                 const cell = boardElement.querySelector(`[data-r='${bestItemTarget.r}'][data-c='${bestItemTarget.c}']`);
                 const sparkle = document.createElement('div');
                 sparkle.className = 'item-sparkle-effect';
@@ -587,10 +605,9 @@
         }
 
         function finalTally() {
-            gameOver = true;
-            isAnimating = false;
+            gameOver = true; isAnimating = false;
             const { black, white } = calculateScores();
-            let winnerMessage = black > white ? "あなたの勝ちです！" : white > black ? "CPUの勝ちです！" : "引き分けです！";
+            let winnerMessage = black > white ? "黒の勝ち！" : white > black ? "白の勝ち！" : "引き分け！";
             updateInfo();
             showMessage(`ゲーム終了！ ${winnerMessage}`, false);
         }
@@ -601,19 +618,28 @@
             whiteScoreElement.textContent = scores.white;
             playerItemsElement.textContent = playerItems;
             computerItemsElement.textContent = computerItems;
-            playerItemsBtnElement.textContent = playerItems;
-            itemConditionElement.textContent = (itemCoefficient + 1) * 10;
+            playerItemsBtnElement.textContent = currentPlayer === BLACK ? playerItems : computerItems;
+            itemConditionElement.textContent = (itemCoefficient + 1) * itemRuleValue;
+
+            if (gameMode === 'solo') {
+                blackPlayerLabel.textContent = 'あなた (黒)'; whitePlayerLabel.textContent = 'CPU (白)';
+                playerItemLabel.textContent = 'あなた'; opponentItemLabel.textContent = 'CPU';
+            } else {
+                blackPlayerLabel.textContent = '黒'; whitePlayerLabel.textContent = '白';
+                playerItemLabel.textContent = '黒'; opponentItemLabel.textContent = '白';
+            }
             
-            useItemButton.disabled = (playerItems <= 0 || isUsingItem || currentPlayer !== HUMAN_PLAYER || gameOver || isAnimating);
+            const currentItems = currentPlayer === BLACK ? playerItems : computerItems;
+            useItemButton.disabled = (currentItems <= 0 || isUsingItem || gameOver || isAnimating);
 
             if (gameOver) {
                 turnTextElement.textContent = "ゲーム終了";
                 turnIndicatorPiece.style.display = 'none';
                 turnInfoElement.classList.remove('thinking');
             } else {
-                turnTextElement.textContent = currentPlayer === HUMAN_PLAYER ? 'あなたの番' : 'CPUの番';
+                turnTextElement.textContent = `${currentPlayer === BLACK ? '黒' : '白'}の番`;
                 turnIndicatorPiece.style.display = 'inline-block';
-                turnIndicatorPiece.className = `turn-indicator ${currentPlayer === HUMAN_PLAYER ? 'black' : 'white'}`;
+                turnIndicatorPiece.className = `turn-indicator ${currentPlayer === BLACK ? 'black' : 'white'}`;
             }
         }
 
@@ -632,12 +658,14 @@
         function hideMessage() { messageBox.classList.add('opacity-0', '-translate-y-2'); }
 
         function highlightValidMoves() {
-            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === EMPTY && getFlippablePieces(r, c, HUMAN_PLAYER).length > 0) boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`).classList.add('valid-move-highlight');
+            const player = (gameMode === 'solo' && currentPlayer === COMPUTER_PLAYER) ? -1 : currentPlayer; // Don't highlight for CPU
+            if (player === -1) return;
+            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === EMPTY && getFlippablePieces(r, c, player).length > 0) boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`).classList.add('valid-move-highlight');
         }
         
         function highlightItemTargets(isEndGame = false) {
-            const targetPlayer = COMPUTER_PLAYER;
-            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === targetPlayer) boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`).classList.add('item-target-highlight');
+            const opponent = currentPlayer === BLACK ? WHITE : BLACK;
+            for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (board[r][c] === opponent) boardElement.querySelector(`[data-r='${r}'][data-c='${c}']`).classList.add('item-target-highlight');
         }
 
         function clearHighlights() {
@@ -645,12 +673,43 @@
         }
 
         // Event Listeners
+        window.addEventListener('keydown', (e) => {
+            if (e.key === ' ' && appState === 'title') {
+                e.preventDefault();
+                startGame();
+            }
+            if (e.key === 'Backspace' && appState === 'playing') {
+                e.preventDefault();
+                showTitleScreen();
+            }
+        });
+        
+        soloModeButton.addEventListener('click', () => {
+            gameMode = 'solo';
+            soloModeButton.classList.add('selected');
+            versusModeButton.classList.remove('selected');
+        });
+        
+        versusModeButton.addEventListener('click', () => {
+            gameMode = 'versus';
+            versusModeButton.classList.add('selected');
+            soloModeButton.classList.remove('selected');
+        });
+
+        ruleButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                itemRuleValue = parseInt(button.dataset.value, 10);
+                ruleButtons.forEach(btn => btn.classList.remove('selected'));
+                button.classList.add('selected');
+            });
+        });
+
         boardElement.addEventListener('click', handleCellClick);
         resetButton.addEventListener('click', initGame);
         useItemButton.addEventListener('click', handleUseItemClick);
 
         // Start the game
-        window.onload = initGame;
+        window.onload = showTitleScreen;
     </script>
 </body>
 </html>
